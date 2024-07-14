@@ -26,8 +26,6 @@ def serialize(li):
 def unchunk(data):
     acc = b""
     i = 0
-    # data = data.replace(b"\x00", b"")
-    # data.decode()
     while True:
         cl = data.readline().decode().strip("\r\n")
         cl = int(cl, 16)
@@ -37,18 +35,9 @@ def unchunk(data):
         data.readline()
         if cl == 0:
             break
-        # print(i)
-        # print(data[i:i+1].split(b"x"))
-        # cha = int(data[i:i+1],16)
-        # print(cha, i+3, i+3+cha, i+3+cha+2)
-        # if (cha == 0): break
-        # acc += data[i+3:i+3+cha]
-        # i = i+3+cha+2
     
     return acc
         
-# print(unchunk(b"4\r\nwiki\r\n7\r\npedia i\r\nB\r\nn \r\nchunks.\r\n0\r\n\r\n").decode())
-
 
 openSocs = {}
 
@@ -114,11 +103,6 @@ class URL:
             parts = line.split(":", 1)
             self.headers[parts[0].casefold()] = parts[1]
         # TODO
-        # assert "content-encoding" not in self.headers
-        # assert "transfer-encoding" not in self.headers
-        # if "content-length" not in self.headers:
-        #     self.content = "oop"
-        # else:
         if "transfer-encoding" in self.headers:
             self.content = unchunk(self.response)
         print(self.headers)
@@ -126,14 +110,11 @@ class URL:
             self.content = gzip.decompress(self.content)
             self.content =  self.content.decode()
         else:
-            # print(unchunked)
             self.content = self.response.decode()
-        # print(splits[-1], "lol")
                 
 
     def recieve(self):
         self.response = self.soc.makefile("rb", newline="\r\n")
-        # print(self.response.read())
         version, code, desc = self.response.readline().decode().split(" ", 2)
         self.parseHeaders()
 
@@ -238,7 +219,6 @@ class Cache:
         self.d[key] = value
 
     def get(self, key):
-        return None
         print("getting cached")
         if key in self.d:
             val =  self.d[key]
