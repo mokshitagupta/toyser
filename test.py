@@ -1,6 +1,6 @@
 from flask import Flask, make_response
 import gzip
-import zlib
+# import zlib
 
 app = Flask(__name__)
 
@@ -10,4 +10,5 @@ def hello_world():
     # # print(gzip.decompress(gzip.compress("abc".encode())))
     # response.headers.set('Content-Type', 'text/plain')
     # response.headers.set('Content-Length', len())
-    return zlib.compress("abc".encode())
+    # return zlib.compress("abc".encode())
+    return

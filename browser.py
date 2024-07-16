@@ -5,20 +5,19 @@ import sys
 import shelve
 import re
 import gzip, zlib
+import tkinter
+import base64, random
+
+from gui import Browser
 
 
 DEFAULT_FILE = "/Users/akhilgupta/Desktop/personal-projects/ongoing/browser/test.txt"
 CACHE_FILE = "cache"
-# https://www.google-analytics.com/analytics.js <- test for cached website
+
 ENTITIES = {
     "&lt;":"<",
     "&gt;":">",
 }
-
-
-def load(url):
-    url.request()
-    url.show() 
 
 def serialize(li):
     return ''.join(str(v) for v in li)
@@ -101,16 +100,22 @@ class URL:
             line = self.response.readline().decode()
             if line == "\r\n": break
             parts = line.split(":", 1)
-            self.headers[parts[0].casefold()] = parts[1]
+            self.headers[parts[0].casefold()] = parts[1].strip()
         # TODO
         if "transfer-encoding" in self.headers:
             self.content = unchunk(self.response)
         print(self.headers)
         if "content-encoding" in self.headers and "gzip" in self.headers["content-encoding"]:
+            if (type(self.content) == type("")):
+                self.content = self.response.read()
             self.content = gzip.decompress(self.content)
-            self.content =  self.content.decode()
+
+        if "image" in self.headers["content-type"]:
+            with open(f"./images/img{random.randrange(1,100)}.png", "wb") as f:
+                f.write(base64.decodebytes(base64.b64encode(self.content)))
+            self.content = self.buf = ""
         else:
-            self.content = self.response.decode()
+            self.content =  self.content.decode()
                 
 
     def recieve(self):
@@ -193,7 +198,9 @@ class URL:
         buf = self.buf
         if self.sourceOnly:
             buf = self.content
-        print(buf)
+        # print(buf)
+
+        return buf
 
 class Redirect:
     def __init__(self, newUrl, old, redir) -> None:
@@ -207,13 +214,19 @@ class Redirect:
         # self.url.redirectCount = redir + 1
         print(self.url.redirectCount, redir)
         if self.url.redirectCount < 10:
-            load(self.url)
+
+            # FIXME: this needs self.browser or something
+            Browser().load(self.url)
         else:
             raise Exception("redirect loop")
             
 class Cache:
     def __init__(self) -> None:
         self.d = shelve.open(CACHE_FILE)
+
+    def clear(self):
+        self.d = {}
+
     def set(self, key, value):
         print("setting", key, value)
         self.d[key] = value
@@ -228,9 +241,6 @@ class Cache:
                 del self.d[key]
         return None
 
-class Browser:
-    def __init__(self):
-        pass
 
 if __name__ == '__main__':
     url = f"file://{DEFAULT_FILE}"
@@ -238,4 +248,8 @@ if __name__ == '__main__':
     cache = Cache()
     if len(sys.argv) >= 2:
         url = sys.argv[1]
-    load(URL(url))
+    
+    Browser().load((URL(url)))
+    tkinter.mainloop()
+
+    
