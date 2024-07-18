@@ -11,4 +11,4 @@ def hello_world():
     # response.headers.set('Content-Type', 'text/plain')
     # response.headers.set('Content-Length', len())
     # return zlib.compress("abc".encode())
-    return
+    return "<p>😀🤞🏿🤞🏻🤞h💩👻😿👿👹🥰</p>"

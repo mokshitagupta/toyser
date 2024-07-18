@@ -38,48 +38,56 @@ def unchunk(data):
     return acc
         
 
+supportedSchemes = ["https", "http", 'file', "data", 'view-source']
 openSocs = {}
 
 class URL:
     def __init__(self, url):
 
-        self.sourceOnly = False
-        self.url = url
-        if len(preSplit := url.split("view-source:", 1)) >= 2:
-            self.sourceOnly = True
-            url = preSplit[1]
+        try:
+            self.sourceOnly = False
+            self.url = url
+            if len(preSplit := url.split("view-source:", 1)) >= 2:
+                self.sourceOnly = True
+                url = preSplit[1]
 
-        urlSplitScheme = url.split("://", 1)
-        self.scheme = urlSplitScheme[0]
+            urlSplitScheme = url.split("://", 1)
+            self.scheme = urlSplitScheme[0]
 
-        self.content = self.buf = ""
+            self.content = self.buf = ""
 
-        if len(urlSplitScheme) < 2:
-            urlSplitScheme = url.split(":", 1)
-            if urlSplitScheme[0] == "data":
-                self.scheme = "data"
-                urlSecond = urlSplitScheme[1].split(",", 1)
-                self.type = urlSecond[0]
-                self.content = self.buf = urlSecond[1]
+            if len(urlSplitScheme) < 2:
+                urlSplitScheme = url.split(":", 1)
+                if urlSplitScheme[0] == "data":
+                    self.scheme = "data"
+                    urlSecond = urlSplitScheme[1].split(",", 1)
+                    self.type = urlSecond[0]
+                    self.content = self.buf = urlSecond[1]
 
-        urlSecond = urlSplitScheme[1].split("/", 1)
-        urlHost = urlSecond[0].split(":", 1)
+            urlSecond = urlSplitScheme[1].split("/", 1)
+            urlHost = urlSecond[0].split(":", 1)
 
-        self.port = 80
-        self.secure = False
-        if self.scheme == "https":
-            self.port = 443
-            self.secure = True
+            self.port = 80
+            self.secure = False
+            if self.scheme == "https":
+                self.port = 443
+                self.secure = True
 
-        self.version = "HTTP/1.1"
-        self.host = urlHost[0]
-        self.agent = "Toyser"
+            self.version = "HTTP/1.1"
+            self.host = urlHost[0]
+            self.agent = "Toyser"
 
-        if len(urlHost) > 1:
-            self.port = int(urlHost[1])
-        
-        self.path = "/" + urlSecond[1]
-        self.redirect = False
+            if len(urlHost) > 1:
+                self.port = int(urlHost[1])
+            
+            self.path = "/" + urlSecond[1]
+            self.redirect = False
+
+            if self.scheme not in supportedSchemes:
+                raise Exception("not supported")
+        except:
+            self.failed = True
+            self.content = self.buf = ""
 
     def createRequest(self):
         request = "GET {path} {version}\r\n".format(path=self.path, version=self.version)
@@ -102,20 +110,28 @@ class URL:
             parts = line.split(":", 1)
             self.headers[parts[0].casefold()] = parts[1].strip()
         # TODO
+        emptied = False
         if "transfer-encoding" in self.headers:
             self.content = unchunk(self.response)
-        print(self.headers)
+            emptied = True
+        # print(self.headers)
         if "content-encoding" in self.headers and "gzip" in self.headers["content-encoding"]:
             if (type(self.content) == type("")):
                 self.content = self.response.read()
             self.content = gzip.decompress(self.content)
+            emptied = True
 
+            # print(self.content)
         if "image" in self.headers["content-type"]:
             with open(f"./images/img{random.randrange(1,100)}.png", "wb") as f:
                 f.write(base64.decodebytes(base64.b64encode(self.content)))
             self.content = self.buf = ""
-        else:
+            emptied = True
+        
+        if emptied:
             self.content =  self.content.decode()
+        else:
+            self.content = self.response.read().decode()
                 
 
     def recieve(self):
@@ -126,7 +142,7 @@ class URL:
         if 400 > int(code) >= 300:
             self.redirect = True        
         if 300 > int(code) >= 200:
-            if "cache-control" in self.headers and (age := self.headers["cache-control"].casefold()) != "no-store":
+            if type(cache) != type({}) and "cache-control" in self.headers and (age := self.headers["cache-control"].casefold()) != "no-store":
                 if "max-age" in age:
                     age = age.split("=")[1]
                     cache.set(serialize([self.host, self.port, self.path]), (age, time.time(), self.content))
@@ -134,10 +150,21 @@ class URL:
 
     
     def request(self):
+
+        if hasattr(self, "failed") and self.failed: 
+            self.content = self.buf = ""
+            return ""
+        
         if self.scheme == "file":
-            with open(self.path) as f:
-                self.content = self.buf = f.read()
-                return self.buf
+            try:
+                with open(self.path) as f:
+                    self.content = self.buf = f.read()
+                    return self.buf
+            except:
+                self.failed = True
+                self.content = self.buf = ""
+                return ""
+
         if self.scheme == "data":
             return self.buf
 
@@ -159,11 +186,12 @@ class URL:
             if self.secure:
                 context = ssl.create_default_context()
                 self.soc = context.wrap_socket(self.soc, server_hostname=self.host)
+            self.soc.send(self.createRequest().encode("utf-8"))
+            self.recieve()
+            self.soc.close()
+            return self.content
+            
 
-        self.soc.send(self.createRequest().encode("utf-8"))
-        self.recieve()
-        self.soc.close()
-        return self.content
     
     def replace(self):
         for e, r in ENTITIES.items():
@@ -185,6 +213,8 @@ class URL:
 
 
     def show(self):
+
+        if hasattr(self, "failed") and self.failed: return ""
         if self.redirect:
             if not hasattr(self, "redirectCount"):
                 self.redirectCount = 1
@@ -198,7 +228,7 @@ class URL:
         buf = self.buf
         if self.sourceOnly:
             buf = self.content
-        # print(buf)
+        print(buf)
 
         return buf
 
@@ -246,6 +276,7 @@ if __name__ == '__main__':
     url = f"file://{DEFAULT_FILE}"
 
     cache = Cache()
+    # cache = {}
     if len(sys.argv) >= 2:
         url = sys.argv[1]
     
